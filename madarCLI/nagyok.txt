@@ -1,0 +1,5 @@
+Egerészölyv;Buteo buteo;800;55;220
+Fehér gólya;Ciconia ciconia;3500;100;10000
+Szürke gém;Ardea cinerea;1000;90;1150
+Kis kárókatona;Phalacrocorax pygmeus;900;50;1100
+Fácán;Phasianus colchicus;1200;60;170
