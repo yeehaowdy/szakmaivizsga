@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.input.*?>
+<?import javafx.scene.layout.*?>
+
+<VBox alignment="TOP_CENTER" prefHeight="500.0" prefWidth="700.0" spacing="10.0" xmlns="http://javafx.com/javafx/17.0.12" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.example.certigui.HelloController">
+    <padding>
+        <Insets bottom="10.0" left="10.0" right="10.0" top="0.0" />
+    </padding>
+    <children>
+        <MenuBar>
+            <menus>
+                <Menu mnemonicParsing="false" text="Fájl">
+                    <items>
+                        <MenuItem mnemonicParsing="false" onAction="#handleMenuOpen" text="Megnyitás">
+                            <accelerator>
+                                <KeyCodeCombination alt="UP" code="O" control="ANY" meta="UP" shift="UP" shortcut="UP" />
+                            </accelerator>
+                        </MenuItem>
+                        <SeparatorMenuItem mnemonicParsing="false" />
+                        <MenuItem mnemonicParsing="false" onAction="#handleExit" text="Kilépés" />
+                    </items>
+                </Menu>
+                <Menu mnemonicParsing="false" text="Súgó">
+                    <items>
+                        <MenuItem mnemonicParsing="false" onAction="#handleAbout" text="Névjegy" />
+                    </items>
+                </Menu>
+            </menus>
+        </MenuBar>
+        <ToolBar prefHeight="40.0" prefWidth="200.0">
+            <items>
+                <RadioButton fx:id="rbExams" mnemonicParsing="false" selected="true" text="Vizsgák">
+                    <toggleGroup>
+                        <ToggleGroup fx:id="categoryGroup" />
+                    </toggleGroup>
+                </RadioButton>
+                <RadioButton fx:id="rbPeople" mnemonicParsing="false" text="Vizsgázók" toggleGroup="$categoryGroup" />
+            </items>
+        </ToolBar>
+        <SplitPane dividerPositions="0.35" VBox.vgrow="ALWAYS">
+            <items>
+                <ListView fx:id="lv_left" minWidth="200.0" prefHeight="300.0" />
+                <ListView fx:id="lv_right" minWidth="400.0" prefHeight="300.0" />
+            </items>
+        </SplitPane>
+    </children>
+</VBox>
