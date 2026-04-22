@@ -1,104 +1,131 @@
-package com.example.certigui;
+package com.example.muzeumgui;
 
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.stage.FileChooser;
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.TreeSet;
 
 public class HelloController {
-    @FXML private RadioButton rbExams, rbPeople;
-    @FXML private ListView<String> lv_left, lv_right;
 
-    private List<ExamAttempt> attempts = new ArrayList<>();
+    @FXML private RadioButton rbVarosok;
+    @FXML private RadioButton rbTipusok;
+    @FXML private ListView<String> lvBal;
+    @FXML private ListView<String> lvJobb;
+    @FXML private Label statusLabel;
+
+    // A beolvasott látogatási adatok listája
+    private List<Latogatas> osszesLatogatas = new ArrayList<>();
 
     @FXML
     public void initialize() {
-        // Módváltás figyelése
-        rbExams.setOnAction(e -> updateLeftList());
-        rbPeople.setOnAction(e -> updateLeftList());
+        // Alapértelmezés szerint a Városok rádiógomb aktív [cite: 32]
+        rbVarosok.setSelected(true);
 
-        // Bal oldali lista kattintás figyelése
-        lv_left.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
-            if (newVal != null) updateRightList(newVal);
+        // Figyeljük, ha a bal oldali listában kiválasztanak valamit
+        lvBal.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+            if (newValue != null) {
+                frissitJobbLista(newValue);
+            }
         });
     }
 
     @FXML
-    private void handleMenuOpen() {
+    protected void onMegnyitas() {
         FileChooser fileChooser = new FileChooser();
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV Files", "*.csv"));
+        fileChooser.setTitle("CSV fájl megnyitása");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV fájlok", "*.csv"));
         File file = fileChooser.showOpenDialog(null);
 
         if (file != null) {
             try {
-                attempts = Files.lines(file.toPath())
-                        .skip(1) // Fejléc kihagyása
-                        .map(line -> new ExamAttempt(line.split(",")))
-                        .collect(Collectors.toList());
-                updateLeftList();
-            } catch (Exception e) {
-                showError("Hiba a fájl beolvasásakor!");
+                // Fájl beolvasása UTF-8 kódolással [cite: 36]
+                List<String> sorok = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
+                osszesLatogatas.clear();
+
+                // Beolvasás ciklussal, a fejlécet (0. sor) kihagyjuk
+                for (int i = 1; i < sorok.size(); i++) {
+                    osszesLatogatas.add(new Latogatas(sorok.get(i)));
+                }
+
+                statusLabel.setText("Adatok betöltve: " + osszesLatogatas.size() + " db");
+                frissitBalLista(); // Betöltés után frissítjük a bal oldali listát
+
+            } catch (IOException e) {
+                statusLabel.setText("Hiba a fájl beolvasásakor!");
             }
         }
     }
 
-    private void updateLeftList() {
-        lv_left.getItems().clear();
-        lv_right.getItems().clear();
+    @FXML
+    protected void frissitBalLista() {
+        lvBal.getItems().clear();
+        lvJobb.getItems().clear();
 
-        if (rbExams.isSelected()) {
-            Set<String> examNames = attempts.stream()
-                    .map(ExamAttempt::getCertificationName)
-                    .collect(Collectors.toCollection(TreeSet::new));
-            lv_left.getItems().addAll(examNames);
+        // TreeSet-et használunk, hogy egyedi és rendezett elemeink legyenek
+        TreeSet<String> egyediElemek = new TreeSet<>();
+
+        if (rbVarosok.isSelected()) {
+            // Ha a városok aktív, kigyűjtjük a városokat
+            for (Latogatas l : osszesLatogatas) {
+                egyediElemek.add(l.varos);
+            }
         } else {
-            // Nagykorúak (2026-ban legalább 18 évesek) ABC sorrendben
-            Set<String> adultNames = attempts.stream()
-                    .filter(a -> a.getAge(2026) >= 18)
-                    .map(ExamAttempt::getFullName)
-                    .collect(Collectors.toCollection(TreeSet::new));
-            lv_left.getItems().addAll(adultNames);
+            // Ha a típusok aktív, kigyűjtjük a típusokat
+            for (Latogatas l : osszesLatogatas) {
+                egyediElemek.add(l.tipus);
+            }
+        }
+
+        // Hozzáadjuk a rendezett elemeket a listához
+        for (String elem : egyediElemek) {
+            lvBal.getItems().add(elem);
         }
     }
 
-    private void updateRightList(String selected) {
-        lv_right.getItems().clear();
-        if (rbExams.isSelected()) {
-            // Sikeres vizsgázók az adott vizsgán
-            List<String> passedPeople = attempts.stream()
-                    .filter(a -> a.getCertificationName().equals(selected) && a.isPassed())
-                    .map(ExamAttempt::getFullName)
-                    .distinct()
-                    .collect(Collectors.toList());
-            lv_right.getItems().addAll(passedPeople);
-        } else {
-            // Adott személy egyedi vizsgái
-            List<String> personCerts = attempts.stream()
-                    .filter(a -> a.getFullName().equals(selected))
-                    .map(ExamAttempt::getCertificationName)
-                    .distinct()
-                    .collect(Collectors.toList());
-            lv_right.getItems().addAll(personCerts);
+    private void frissitJobbLista(String szuro) {
+        lvJobb.getItems().clear();
+
+        // Végigmegyünk a listán és keressük az egyezéseket [cite: 38, 40]
+        for (Latogatas l : osszesLatogatas) {
+            if (rbVarosok.isSelected() && l.varos.equals(szuro)) {
+                lvJobb.getItems().add(l.nev + " (" + l.muzeum + ")");
+            } else if (rbTipusok.isSelected() && l.tipus.equals(szuro)) {
+                lvJobb.getItems().add(l.nev + " (" + l.muzeum + ")");
+            }
         }
     }
-
-    @FXML private void handleExit() { Platform.exit(); }
 
     @FXML
-    private void handleAbout() {
+    protected void onNevjegy() {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Névjegy");
-        alert.setHeaderText("GetCertifiedGUI");
-        alert.setContentText("Szakmai vizsga tanúsítványok kezelő szoftvere.");
-        alert.showAndWait();
+        alert.setHeaderText("Múzeumlátogatások GUI");
+        alert.setContentText("Készítette: [Neved]\nVerzió: 1.0");
+        alert.showAndWait(); // [cite: 41]
     }
 
-    private void showError(String msg) {
-        Alert alert = new Alert(Alert.AlertType.ERROR, msg);
-        alert.showAndWait();
+    @FXML
+    protected void onKilepes() {
+        Platform.exit(); // [cite: 41]
+    }
+
+    // Belső osztály a CSV adatok tárolására
+    private static class Latogatas {
+        String nev, muzeum, varos, tipus;
+
+        public Latogatas(String sor) {
+            String[] s = sor.split(",", -1);
+            this.nev = s[0].replace("\"", "");
+            this.muzeum = s[3].replace("\"", "");
+            this.varos = s[4].replace("\"", "");
+            this.tipus = s[5].replace("\"", "");
+        }
     }
 }
