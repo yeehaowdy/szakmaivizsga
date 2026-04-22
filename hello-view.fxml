@@ -1,50 +1,60 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<?import javafx.geometry.*?>
+<?import javafx.geometry.Insets?>
 <?import javafx.scene.control.*?>
-<?import javafx.scene.input.*?>
 <?import javafx.scene.layout.*?>
+<?import javafx.scene.input.KeyCodeCombination?>
 
-<VBox alignment="TOP_CENTER" prefHeight="500.0" prefWidth="700.0" spacing="10.0" xmlns="http://javafx.com/javafx/17.0.12" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.example.certigui.HelloController">
-    <padding>
-        <Insets bottom="10.0" left="10.0" right="10.0" top="0.0" />
-    </padding>
+<VBox prefHeight="450.0" prefWidth="650.0" xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.example.muzeumgui.HelloController">
     <children>
         <MenuBar>
             <menus>
-                <Menu mnemonicParsing="false" text="Fájl">
+                <Menu text="Fájl">
                     <items>
-                        <MenuItem mnemonicParsing="false" onAction="#handleMenuOpen" text="Megnyitás">
+                        <MenuItem onAction="#onMegnyitas" text="Megnyitás">
                             <accelerator>
-                                <KeyCodeCombination alt="UP" code="O" control="ANY" meta="UP" shift="UP" shortcut="UP" />
+                                <KeyCodeCombination alt="UP" code="O" control="DOWN" meta="UP" shift="UP" shortcut="UP" />
                             </accelerator>
                         </MenuItem>
-                        <SeparatorMenuItem mnemonicParsing="false" />
-                        <MenuItem mnemonicParsing="false" onAction="#handleExit" text="Kilépés" />
+                        <MenuItem onAction="#onKilepes" text="Kilépés" />
                     </items>
                 </Menu>
-                <Menu mnemonicParsing="false" text="Súgó">
+                <Menu text="Súgó">
                     <items>
-                        <MenuItem mnemonicParsing="false" onAction="#handleAbout" text="Névjegy" />
+                        <MenuItem onAction="#onNevjegy" text="Névjegy" />
                     </items>
                 </Menu>
             </menus>
         </MenuBar>
-        <ToolBar prefHeight="40.0" prefWidth="200.0">
-            <items>
-                <RadioButton fx:id="rbExams" mnemonicParsing="false" selected="true" text="Vizsgák">
+
+        <HBox spacing="10.0">
+            <padding>
+                <Insets bottom="10.0" left="10.0" right="10.0" top="10.0" />
+            </padding>
+            <children>
+                <RadioButton fx:id="rbVarosok" mnemonicParsing="false" onAction="#frissitBalLista" text="Városok">
                     <toggleGroup>
-                        <ToggleGroup fx:id="categoryGroup" />
+                        <ToggleGroup fx:id="szuroCsoport" />
                     </toggleGroup>
                 </RadioButton>
-                <RadioButton fx:id="rbPeople" mnemonicParsing="false" text="Vizsgázók" toggleGroup="$categoryGroup" />
-            </items>
-        </ToolBar>
-        <SplitPane dividerPositions="0.35" VBox.vgrow="ALWAYS">
-            <items>
-                <ListView fx:id="lv_left" minWidth="200.0" prefHeight="300.0" />
-                <ListView fx:id="lv_right" minWidth="400.0" prefHeight="300.0" />
-            </items>
-        </SplitPane>
+                <RadioButton fx:id="rbTipusok" mnemonicParsing="false" onAction="#frissitBalLista" text="Típusok" toggleGroup="$szuroCsoport" />
+            </children>
+        </HBox>
+
+        <HBox spacing="15.0" VBox.vgrow="ALWAYS">
+            <padding>
+                <Insets bottom="10.0" left="10.0" right="10.0" top="5.0" />
+            </padding>
+            <children>
+                <ListView fx:id="lvBal" minWidth="200.0" prefHeight="300.0" prefWidth="200.0" HBox.hgrow="NEVER" />
+                <ListView fx:id="lvJobb" minWidth="400.0" prefHeight="300.0" prefWidth="400.0" HBox.hgrow="ALWAYS" />
+            </children>
+        </HBox>
+
+        <Label fx:id="statusLabel" text="Ready">
+            <VBox.margin>
+                <Insets bottom="5.0" left="10.0" />
+            </VBox.margin>
+        </Label>
     </children>
 </VBox>
