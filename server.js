@@ -1,132 +1,200 @@
 const express = require('express');
-const mysql = require('mysql2');
+const mysql = require('mysql2/promise');
 const cors = require('cors');
 
 const app = express();
-
-// Middleware beállítások
 app.use(cors());
-app.use(express.json()); // Body-parser helyett az Express beépített JSON értelmezője
+app.use(express.json());
 
-// Adatbázis kapcsolat létrehozása a get_certified sémához
-const db = mysql.createConnection({
+// Adatbázis konfiguráció 
+const dbConfig = {
     host: 'localhost',
     user: 'root',
     password: '',
-    database: 'get_certified'
-});
+    database: 'exhibitions'
+};
 
-db.connect(err => {
-    if (err) {
-        console.error('Hiba az adatbázis csatlakozáskor:', err);
-        return;
+// 1. Városok listázása [cite: 147, 148, 149, 150]
+app.get('/api/cities', async (req, res) => {
+    try {
+        const connection = await mysql.createConnection(dbConfig);
+        // Városok lekérése ABC sorrendben [cite: 148]
+        const [cities] = await connection.execute('SELECT DISTINCT city FROM museums ORDER BY city ASC');
+        
+        const result = [];
+        for (const row of cities) {
+            // Múzeumok lekérése az adott városhoz [cite: 149]
+            const [museums] = await connection.execute(
+                'SELECT id, name, anchor, image FROM museums WHERE city = ?', 
+                [row.city]
+            );
+            result.push({
+                city: row.city,
+                museums: museums
+            });
+        }
+        
+        await connection.end();
+        res.status(200).json({ success: true, data: result });
+    } catch (error) {
+        res.status(500).json({ success: false, error: "Adatbázis lekérdezési hiba" });
     }
-    console.log('Sikeresen csatlakozva a MySQL adatbázishoz.');
 });
 
-// 1. Személyek lekérdezése (ABC sorrendben) [cite: 354, 356]
-app.get('/api/people', (req, res) => {
-    const sql = "SELECT * FROM people ORDER BY last_name ASC, first_name ASC";
-    db.query(sql, (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(results);
-    });
+// 2. Egy város múzeumaiban zajlott látogatások [cite: 151, 152, 153, 154]
+// Megjegyzés: A feladat szerint egy múzeum ID alapján keressük meg a várost, majd annak összes látogatását [cite: 177, 178]
+app.get('/api/cities/:id', async (req, res) => {
+    try {
+        const connection = await mysql.createConnection(dbConfig);
+        const museumId = req.params.id;
+
+        // Előbb megkeressük melyik városról van szó az ID alapján
+        const [museumRows] = await connection.execute('SELECT city FROM museums WHERE id = ?', [museumId]);
+        
+        if (museumRows.length === 0) {
+            await connection.end();
+            return res.status(404).json({ success: false, error: "A város nem található" });
+        }
+
+        const cityName = museumRows[0].city;
+
+        // Lekérdezzük az adott város összes múzeumának összes látogatását [cite: 152]
+        const query = `
+            SELECT v.id AS visit_id, v.name AS visit_name, v.description, v.visit_time, 
+                   m.name AS museum_name, m.anchor AS museum_anchor, m.image AS museum_image, 
+                   t.name AS type_name
+            FROM visits v
+            JOIN museums m ON v.museum_id = m.id
+            JOIN types t ON v.type_id = t.id
+            WHERE m.city = ?`;
+        
+        const [visits] = await connection.execute(query, [cityName]);
+        
+        await connection.end();
+        res.status(200).json({ 
+            success: true, 
+            city: cityName, 
+            data: visits 
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: "Szerver hiba" });
+    }
 });
 
-// 2. Tanúsítványok lekérdezése (Név szerinti ABC sorrendben) [cite: 357, 359]
-app.get('/api/certifications', (req, res) => {
-    const sql = "SELECT * FROM certifications ORDER BY name ASC";
-    db.query(sql, (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(results);
-    });
+// 3. Keresés látogatások között [cite: 155, 156, 157]
+app.get('/api/visits/search/:keyword', async (req, res) => {
+    try {
+        const connection = await mysql.createConnection(dbConfig);
+        const keyword = `%${req.params.keyword}%`;
+
+        const query = `
+            SELECT v.id AS visit_id, v.name AS visit_name, v.description, v.visit_time, 
+                   m.name AS museum_name, m.city, m.anchor AS museum_anchor, m.image AS museum_image, 
+                   t.name AS type_name
+            FROM visits v
+            JOIN museums m ON v.museum_id = m.id
+            JOIN types t ON v.type_id = t.id
+            WHERE v.name LIKE ? OR v.description LIKE ? OR m.name LIKE ? OR t.name LIKE ?`;
+        
+        const [results] = await connection.execute(query, [keyword, keyword, keyword, keyword]);
+        
+        await connection.end();
+        
+        if (results.length === 0) {
+            return res.status(200).json({ 
+                success: false, 
+                keyword: req.params.keyword, 
+                message: "Nincs találat a keresésre" 
+            });
+        }
+
+        res.status(200).json({ 
+            success: true, 
+            keyword: req.params.keyword, 
+            count: results.length, 
+            data: results 
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: "Keresési hiba" });
+    }
 });
 
-// 3. Egy személy vizsgakísérleteinek lekérdezése [cite: 360, 362]
-// Tartalmazza a tanúsítvány és a szolgáltató nevét is
-app.get('/api/attempts/person/:person_id', (req, res) => {
-    const sql = `
-        SELECT a.id AS attempt_id, a.person_id, p.first_name, p.last_name, 
-               a.certification_id, c.name AS certification_name, pr.name AS provider_name,
-               a.start_datetime, a.end_datetime, a.percentage, a.is_passed, 
-               a.previous_attempt_id, a.next_attempt_id
-        FROM attempts a
-        JOIN people p ON a.person_id = p.id
-        JOIN certifications c ON a.certification_id = c.id
-        JOIN providers pr ON c.provider_id = pr.id
-        WHERE a.person_id = ?`;
-    db.query(sql, [req.params.person_id], (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(results);
-    });
+// 4. Egy látogatás időtartamának módosítása [cite: 158, 159, 160]
+app.put('/api/visits/:id', async (req, res) => {
+    try {
+        const { visit_time } = req.body;
+        const visitId = req.params.id;
+
+        if (visit_time === undefined || isNaN(visit_time)) {
+            return res.status(400).json({ success: false, error: "Hiányzik a visit_time mező vagy az érték nem szám" });
+        }
+
+        const connection = await mysql.createConnection(dbConfig);
+        
+        const [updateResult] = await connection.execute(
+            'UPDATE visits SET visit_time = ? WHERE id = ?', 
+            [visit_time, visitId]
+        );
+
+        if (updateResult.affectedRows === 0) {
+            await connection.end();
+            return res.status(404).json({ success: false, error: "A látogatás nem található" });
+        }
+
+        // Visszaadjuk a módosított adatokat a minta szerint [cite: 160]
+        const [updatedData] = await connection.execute(`
+            SELECT v.*, m.name AS museum_name, m.anchor AS museum_anchor, m.image AS museum_image, t.name AS type_name 
+            FROM visits v 
+            JOIN museums m ON v.museum_id = m.id 
+            JOIN types t ON v.type_id = t.id 
+            WHERE v.id = ?`, [visitId]);
+
+        await connection.end();
+        res.status(200).json({ 
+            success: true, 
+            message: "A látogatás időtartama sikeresen módosítva", 
+            data: updatedData[0] 
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: "Módosítási hiba" });
+    }
 });
 
-// 4. Egy tanúsítvány kísérleteinek lekérdezése [cite: 363, 364]
-app.get('/api/attempts/certification/:certification_id', (req, res) => {
-    const sql = `
-        SELECT a.id AS attempt_id, a.person_id, CONCAT(p.first_name, ' ', p.last_name) AS full_name,
-               a.certification_id, c.name AS certification_name, pr.name AS provider_name,
-               a.start_datetime, a.end_datetime, a.percentage, a.is_passed
-        FROM attempts a
-        JOIN people p ON a.person_id = p.id
-        JOIN certifications c ON a.certification_id = c.id
-        JOIN providers pr ON c.provider_id = pr.id
-        WHERE a.certification_id = ?`;
-    db.query(sql, [req.params.certification_id], (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(results);
-    });
-});
+// 5. Új látogatási típus bevezetése [cite: 161, 162, 163]
+app.post('/api/types', async (req, res) => {
+    try {
+        const { name } = req.body;
 
-// 5. Keresés tanúsítvány vagy szolgáltató neve alapján [cite: 365, 366]
-app.get('/api/search/:searchedWord', (req, res) => {
-    const search = `%${req.params.searchedWord}%`;
-    const sql = `
-        SELECT a.id AS attempt_id, CONCAT(p.first_name, ' ', p.last_name) AS person_name,
-               a.certification_id, c.name AS certification_name, pr.name AS provider_name,
-               a.start_datetime, a.end_datetime, a.percentage, a.is_passed
-        FROM attempts a
-        JOIN people p ON a.person_id = p.id
-        JOIN certifications c ON a.certification_id = c.id
-        JOIN providers pr ON c.provider_id = pr.id
-        WHERE c.name LIKE ? OR pr.name LIKE ?`;
-    db.query(sql, [search, search], (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(results);
-    });
-});
+        if (!name || typeof name !== 'string') {
+            return res.status(400).json({ success: false, error: "Hiányzik a name mező vagy nem string" });
+        }
 
-// 6. Egy vizsgakísérlet módosítása azonosító alapján [cite: 367, 369]
-app.patch('/api/update-attempt', (req, res) => {
-    const { id, end_datetime, percentage, is_passed } = req.body;
-    const sql = "UPDATE attempts SET end_datetime = ?, percentage = ?, is_passed = ? WHERE id = ?";
-    db.query(sql, [end_datetime, percentage, is_passed, id], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: "Sikeresen módosítva.", affectedRows: result.affectedRows });
-    });
-});
+        const connection = await mysql.createConnection(dbConfig);
+        
+        // Ellenőrizzük, létezik-e már [cite: 163]
+        const [existing] = await connection.execute('SELECT id FROM types WHERE name = ?', [name]);
+        if (existing.length > 0) {
+            await connection.end();
+            return res.status(409).json({ success: false, error: "Ez a típus már létezik" });
+        }
 
-// 7. Új vizsgakísérlet felvétele [cite: 372, 373]
-app.post('/api/attempts', (req, res) => {
-    const sql = "INSERT INTO attempts SET ?";
-    db.query(sql, req.body, (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: "Vizsgakísérlet sikeresen felvéve.", id: result.insertId });
-    });
-});
+        const [insertResult] = await connection.execute('INSERT INTO types (name) VALUES (?)', [name]);
+        
+        const newId = insertResult.insertId;
+        await connection.end();
 
-// 8. Vizsgakísérlet törlése azonosító alapján [cite: 376, 377]
-app.delete('/api/attempts', (req, res) => {
-    const { id } = req.body;
-    const sql = "DELETE FROM attempts WHERE id = ?";
-    db.query(sql, [id], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: "Vizsgakísérlet sikeresen törölve.", affectedRows: result.affectedRows });
-    });
+        res.status(201).json({ 
+            success: true, 
+            message: "Új típus sikeresen létrehozva", 
+            data: { id: newId, name: name } 
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: "Hiba a létrehozás során" });
+    }
 });
 
 // Szerver indítása
 const PORT = 3000;
 app.listen(PORT, () => {
-    console.log(`A szerver fut a http://localhost:${PORT} címen.`);
+    console.log(`Backend szerver fut a http://localhost:${PORT} porton`);
 });
