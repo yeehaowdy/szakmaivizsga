@@ -1,201 +1,135 @@
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
-import java.util.stream.*;
+
+// Adatosztály a látogatások tárolására
+class Latogatas {
+    public String nev;
+    public String leiras;
+    public double idotartam;
+    public String muzeum;
+    public String varos;
+    public String tipus;
+
+    public Latogatas(String sor) {
+        // A CSV fájlban az adatok idézojelek között is lehetnek, 
+        // egy egyszerű split("," , -1) helyett érdemes a felesleges karaktereket letisztítani
+        String[] s = sor.split(",");
+        this.nev = s[0].replace("\"", "");
+        this.leiras = s[1].replace("\"", "");
+        this.idotartam = Double.parseDouble(s[2]);
+        this.muzeum = s[3].replace("\"", "");
+        this.varos = s[4].replace("\"", "");
+        this.tipus = s[5].replace("\"", "");
+    }
+}
 
 public class Main {
 
-    // --- Adatmodell ---
-    static class Attempt {
-        int attemptId;
-        int personId;
-        String firstName;
-        String lastName;
-        String birthday;
-        int certificationId;
-        String certificationName;
-        String providerName;
-        String reputationStars;
-        String minPercentageToPass;
-        String costInUsd;
-        String startDatetime;
-        String endDatetime;
-        String percentage;   // lehet üres
-        String isPassed;     // "True", "False", vagy üres
+    public static void main(String[] args) {
+        List<Latogatas> latogatasok = new ArrayList<>();
 
-        public Attempt(String[] parts) {
-            attemptId           = Integer.parseInt(parts[0].trim());
-            personId            = Integer.parseInt(parts[1].trim());
-            firstName           = parts[2].trim();
-            lastName            = parts[3].trim();
-            birthday            = parts[4].trim();
-            certificationId     = Integer.parseInt(parts[5].trim());
-            certificationName   = parts[6].trim();
-            providerName        = parts[7].trim();
-            reputationStars     = parts[8].trim();
-            minPercentageToPass = parts[9].trim();
-            costInUsd           = parts[10].trim();
-            startDatetime       = parts[11].trim();
-            endDatetime         = parts[12].trim();
-            percentage          = parts[13].trim();
-            isPassed            = parts[14].trim();
+        // 1. Feladat: Beolvasás [cite: 3]
+        try {
+            List<String> sorok = Files.readAllLines(Paths.get("exhibitions.csv"), StandardCharsets.UTF_8);
+            // A fejlécet (elso sor) kihagyjuk
+            for (int i = 1; i < sorok.size(); i++) {
+                latogatasok.add(new Latogatas(sorok.get(i)));
+            }
+            System.out.println("Az exhibitions.csv fájlból " + latogatasok.size() + " látogatás adata beolvasva"); // [cite: 13]
+        } catch (IOException e) {
+            System.err.println("Hiba a fájl beolvasásakor: " + e.getMessage());
+            return;
         }
 
-        String fullName() {
-            return firstName + " " + lastName;
+        // 2. Feladat: Leghosszabb látogatás [cite: 4]
+        Latogatas maxLatogatas = latogatasok.get(0);
+        for (Latogatas l : latogatasok) {
+            if (l.idotartam > maxLatogatas.idotartam) {
+                maxLatogatas = l;
+            }
+        }
+        System.out.println("A leghosszabb látogatás: " + maxLatogatas.nev + " - " + maxLatogatas.muzeum + ": " + maxLatogatas.idotartam + " óra");
+
+        // 3. Feladat: Guided tour típusúak, csökkeno sorrendben [cite: 5]
+        List<Latogatas> guidedTours = new ArrayList<>();
+        for (Latogatas l : latogatasok) {
+            if (l.tipus.equalsIgnoreCase("guided tour")) {
+                guidedTours.add(l);
+            }
+        }
+        // Rendezés csökkeno sorrendbe idotartam szerint
+        guidedTours.sort((a, b) -> Double.compare(b.idotartam, a.idotartam));
+
+        System.out.println("A guided tour típusú látogatások (idotartam szerint csökkenoben):");
+        for (Latogatas gt : guidedTours) {
+            System.out.println(gt.nev + " – " + gt.muzeum + " (" + gt.idotartam + " óra)");
         }
 
-        boolean passed() {
-            return "True".equalsIgnoreCase(isPassed);
+        // 4. Feladat: Különbözo múzeumok száma és véletlenszerű választás [cite: 6, 7]
+        Set<String> muzeumok = new HashSet<>();
+        for (Latogatas l : latogatasok) {
+            muzeumok.add(l.muzeum);
+        }
+        System.out.println("Összesen " + muzeumok.size() + " különbözo múzeum található a fájlban");
+
+        List<String> muzeumLista = new ArrayList<>(muzeumok);
+        Random r = new Random();
+        String veletlenMuzeum = muzeumLista.get(r.nextInt(muzeumLista.size()));
+
+        System.out.println("Közülük egy véletlen kiválasztott: " + veletlenMuzeum + ", látogatói:");
+        for (Latogatas l : latogatasok) {
+            if (l.muzeum.equals(veletlenMuzeum)) {
+                System.out.println(l.nev);
+            }
         }
 
-        boolean failed() {
-            return "False".equalsIgnoreCase(isPassed);
+        // 5. Feladat: Legtöbb szóból álló múzeumnév [cite: 8]
+        String leghosszabbNevuMuzeum = "";
+        int maxSzo = 0;
+        for (String mNev : muzeumok) {
+            int aktualisSzoSzam = szavakSzama(mNev);
+            if (aktualisSzoSzam > maxSzo) {
+                maxSzo = aktualisSzoSzam;
+                leghosszabbNevuMuzeum = mNev;
+            }
+        }
+        System.out.println("Legtöbb szóból álló múzeumnév: " + leghosszabbNevuMuzeum);
+
+        // 6. Feladat: Városonkénti statisztika (ABC sorrend) [cite: 9, 10]
+        Map<String, Integer> varosStat = new TreeMap<>(); // A TreeMap automatikusan ABC sorrendbe teszi a kulcsokat
+        for (Latogatas l : latogatasok) {
+            varosStat.put(l.varos, varosStat.getOrDefault(l.varos, 0) + 1);
+        }
+
+        System.out.print("Látogatások száma városonként: ");
+        int szamlalo = 0;
+        for (Map.Entry<String, Integer> entry : varosStat.entrySet()) {
+            System.out.print(entry.getKey() + " (" + entry.getValue() + ")");
+            szamlalo++;
+            if (szamlalo < varosStat.size()) {
+                System.out.print(", "); // Az utolsó után nem teszünk vesszot [cite: 10]
+            }
+        }
+        System.out.println();
+
+        // 7. Feladat: 2 óránál rövidebbek mentése [cite: 11]
+        try (PrintWriter iro = new PrintWriter(new FileWriter("rovid_latogatasok.txt", StandardCharsets.UTF_8))) {
+            for (Latogatas l : latogatasok) {
+                if (l.idotartam < 2.0) {
+                    iro.println(l.nev + " – " + l.muzeum + ": " + l.idotartam + " óra");
+                }
+            }
+            System.out.println("A 2 óránál rövidebb látogatások adatai kiírva a rovid_latogatasok.txt fájlba");
+        } catch (IOException e) {
+            System.err.println("Hiba a fájlba íráskor: " + e.getMessage());
         }
     }
 
-    // --- Beolvasás ---
-    static List<Attempt> readCsv(String path) throws IOException {
-        List<Attempt> list = new ArrayList<>();
-        List<String> lines = Files.readAllLines(Path.of(path));
-        boolean firstLine = true;
-        for (String line : lines) {
-            if (firstLine) { firstLine = false; continue; } // fejléc kihagyása
-            if (line.isBlank()) continue;
-            String[] parts = line.split(",", -1);
-            if (parts.length >= 15) {
-                list.add(new Attempt(parts));
-            }
-        }
-        return list;
-    }
-
-    public static void main(String[] args) throws IOException {
-        String csvPath = "get-certified.csv";
-        List<Attempt> attempts = readCsv(csvPath);
-
-        // ============================
-        // 1. feladat – Beolvasott sorok
-        // ============================
-        System.out.println("=== 1. feladat ===");
-        System.out.println("Beolvasott sorok száma: " + attempts.size());
-        System.out.println();
-
-        // ============================
-        // 2. feladat – Leghosszabb nevű tanúsítvány
-        // ============================
-        System.out.println("=== 2. feladat ===");
-        Attempt longest = null;
-        for (Attempt a : attempts) {
-            if (longest == null || a.certificationName.length() > longest.certificationName.length()) {
-                longest = a;
-            }
-        }
-        System.out.println("Leghosszabb nevű tanúsítvány:");
-        System.out.println("Tanúsítvány: " + longest.certificationName);
-        System.out.println("Szolgáltató: " + longest.providerName);
-        System.out.println();
-
-        // ============================
-        // 3. feladat – Sikeresek, start_datetime szerint csökkenő
-        // ============================
-        System.out.println("=== 3. feladat ===");
-        List<Attempt> passed = new ArrayList<>();
-        for (Attempt a : attempts) {
-            if (a.passed()) passed.add(a);
-        }
-        passed.sort((a, b) -> b.startDatetime.compareTo(a.startDatetime));
-
-        System.out.println("Sikeres kísérletek (start_datetime szerint csökkenő):");
-        for (Attempt a : passed) {
-            System.out.println(a.fullName() + " -- " + a.certificationName + " (" + a.startDatetime + ")");
-        }
-        System.out.println();
-
-        // ============================
-        // 4. feladat – Sikertelen kísérletek, véletlenszerű kiválasztás
-        // ============================
-        System.out.println("=== 4. feladat ===");
-        List<Attempt> failed = new ArrayList<>();
-        for (Attempt a : attempts) {
-            if (a.failed()) failed.add(a);
-        }
-        System.out.println("Sikertelen kísérletek száma: " + failed.size());
-
-        Random rnd = new Random();
-        Attempt randomFailed = failed.get(rnd.nextInt(failed.size()));
-        System.out.println("Véletlenszerűen kiválasztott sikertelen kísérlet:");
-        System.out.println(randomFailed.fullName() + " -- " + randomFailed.certificationName);
-        System.out.println();
-
-        // ============================
-        // 5. feladat – Százalékos átlag, legközelebb eső kísérlet
-        // ============================
-        System.out.println("=== 5. feladat ===");
-        List<Attempt> withPercent = new ArrayList<>();
-        for (Attempt a : attempts) {
-            if (!a.percentage.isEmpty()) withPercent.add(a);
-        }
-
-        double sum = 0;
-        for (Attempt a : withPercent) {
-            sum += Double.parseDouble(a.percentage);
-        }
-        double avg = sum / withPercent.size();
-        System.out.printf("Százalékeredmények átlaga: %.2f%%%n", avg);
-
-        Attempt closest = null;
-        double minDiff = Double.MAX_VALUE;
-        for (Attempt a : withPercent) {
-            double diff = Math.abs(Double.parseDouble(a.percentage) - avg);
-            if (diff < minDiff) {
-                minDiff = diff;
-                closest = a;
-            }
-        }
-        System.out.println("Legközelebb eső kísérlet:");
-        System.out.println("#" + closest.attemptId + " -- " + closest.fullName()
-                + " -- " + closest.certificationName + " -- " + (int) Double.parseDouble(closest.percentage) + "%");
-        System.out.println();
-
-        // ============================
-        // 6. feladat – Szolgáltatónként kísérletek száma, növekvő sorrend, tab elválasztással
-        // ============================
-        System.out.println("=== 6. feladat ===");
-        Map<String, Integer> providerCount = new LinkedHashMap<>();
-        for (Attempt a : attempts) {
-            providerCount.merge(a.providerName, 1, Integer::sum);
-        }
-
-        // Rendezés növekvő darabszám szerint
-        List<Map.Entry<String, Integer>> sorted = new ArrayList<>(providerCount.entrySet());
-        sorted.sort(Map.Entry.comparingByValue());
-
-        for (int i = 0; i < sorted.size(); i++) {
-            Map.Entry<String, Integer> entry = sorted.get(i);
-            if (i < sorted.size() - 1) {
-                System.out.print(entry.getKey() + "\t" + entry.getValue() + "\t");
-            } else {
-                System.out.print(entry.getKey() + "\t" + entry.getValue()); // utolsó után nincs tab
-            }
-            System.out.println();
-        }
-        System.out.println();
-
-        // ============================
-        // 7. feladat – Egyedi tanúsítványnevek mentése certek.txt-be
-        // ============================
-        System.out.println("=== 7. feladat ===");
-        Set<String> certNames = new LinkedHashSet<>();
-        for (Attempt a : attempts) {
-            certNames.add(a.certificationName);
-        }
-
-        try (PrintWriter pw = new PrintWriter("certek.txt")) {
-            for (String name : certNames) {
-                pw.println(name);
-            }
-        }
-        System.out.println("Egyedi tanúsítványnevek mentve → certek.txt (" + certNames.size() + " bejegyzés)");
+    // Segédfüggvény a szavak számának meghatározásához [cite: 8]
+    public static int szavakSzama(String muzeumNev) {
+        if (muzeumNev == null || muzeumNev.isEmpty()) return 0;
+        return muzeumNev.trim().split("\\s+").length;
     }
 }
